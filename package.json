@@ -1,19 +1,14 @@
 {
-  "name": "token-scraper-api",
+  "name": "token-capturer",
   "version": "1.0.0",
-  "description": "API server that scrapes JWT token from a protected site using Puppeteer",
+  "description": "Capture token after button click using jsdom and axios",
   "main": "api.js",
   "scripts": {
-    "start": "node api.js",
-    "dev": "nodemon api.js"
+    "start": "node api.js"
   },
-  "author": "your-name",
-  "license": "MIT",
   "dependencies": {
-    "express": "^4.19.2",
-    "axios": "^1.11.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.0"
+    "axios": "^1.6.7",
+    "jsdom": "^24.0.0",
+    "node-fetch": "^2.6.9"
   }
 }
