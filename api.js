@@ -1,63 +1,59 @@
 const axios = require("axios");
+const { JSDOM } = require("jsdom");
 
-/**
- * Fetch page HTML and extract fresh JWT token
- */
-async function getFreshToken(pageUrl) {
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-  };
+// Polyfill fetch for jsdom scripts
+const fetch = require("node-fetch");
+global.fetch = fetch;
 
-  const res = await axios.get(pageUrl, { headers });
-  const html = res.data;
+async function getTokenAfterClick() {
+  const url =
+    "https://drive2.cscloud12.online/server3/lyppijeepgwshlzadesu/Drive03/Leo%20(2023)%20Tamil%20WEB-DL-%5BCineSubz.co%5D-480p?ext=mp4";
 
-  // Regex to grab JWT from inline script
-  const match = html.match(
-    /token\s*=\s*"([A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+)"/
-  );
-  if (!match) throw new Error("Token not found in page");
+  // Step 1: fetch the page HTML
+  const res = await axios.get(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+    },
+  });
 
-  return match[1];
+  // Step 2: load HTML into jsdom
+  const dom = new JSDOM(res.data, {
+    url, // pretend this is the page URL
+    runScripts: "dangerously", // allow inline scripts
+    resources: "usable", // load external <script src="">
+    pretendToBeVisual: true,
+  });
+
+  return new Promise((resolve, reject) => {
+    dom.window.document.addEventListener("DOMContentLoaded", async () => {
+      try {
+        // Step 3: simulate button click
+        const btn = dom.window.document.querySelector("#directButton");
+        if (!btn) return reject("❌ Direct button not found");
+
+        // monkey-patch fetch to capture POST data
+        const origFetch = dom.window.fetch;
+        dom.window.fetch = async (reqUrl, options) => {
+          if (options && options.body) {
+            try {
+              const data = JSON.parse(options.body);
+              if (data.token) {
+                console.log("✅ Token captured:", data.token);
+                resolve(data.token);
+              }
+            } catch (e) {}
+          }
+          return origFetch(reqUrl, options);
+        };
+
+        // Trigger click
+        btn.click();
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
 }
 
-/**
- * Use the fresh token to request direct download link
- */
-async function getDirectLink(pageUrl) {
-  const token = await getFreshToken(pageUrl);
-
-  const payload = {
-    v: 3,
-    u: "cinesubz",
-    direct: true,
-    token,
-  };
-
-  const headers = {
-    "Content-Type": "application/json",
-    Referer: pageUrl,
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-  };
-
-  const res = await axios.post(pageUrl, payload, { headers });
-  if (!res.data?.url) throw new Error("No direct link returned");
-
-  return res.data.url;
-}
-
-// Example usage
-(async () => {
-  try {
-    const pageUrl =
-      "https://drive2.cscloud12.online/server3/lyppijeepgwshlzadesu/Drive03/Leo%20(2023)%20Tamil%20WEB-DL-%5BCineSubz.co%5D-480p?ext=mp4";
-
-    const directLink = await getDirectLink(pageUrl);
-    console.log("✅ Direct link:", directLink);
-  } catch (err) {
-    console.error("Error:", err.message);
-  }
-})();
+getTokenAfterClick().catch(console.error);
