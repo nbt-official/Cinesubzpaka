@@ -1,48 +1,28 @@
 const axios = require("axios");
-const cheerio = require("cheerio");
 
-async function scrapeLinks(videoUrl) {
-  try {
-    // Step 1: POST request with the video URL
-    const response = await axios.post(
-      "https://www.saveporn.net/vdownload/",
-      new URLSearchParams({ url: videoUrl }), // form-urlencoded body
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent":
-            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36",
-          Referer: "https://www.saveporn.net/",
-          Origin: "https://www.saveporn.net",
-        },
-      }
-    );
+async function getJobUrl(resourceId, itemId) {
+  // Step 1: trigger the download job
+  const res = await axios.post(
+    "https://webtor.io/download-file",
+    new URLSearchParams({
+      "resource-id": resourceId,
+      "item-id": itemId
+    }),
+    { maxRedirects: 0 } // we don’t follow redirects
+  );
 
-    // Step 2: Load HTML with cheerio
-    const $ = cheerio.load(response.data);
-
-    // Step 3: Scrape download links
-    let results = [];
-    $("#dtable table tr").each((i, el) => {
-      const format = $(el).find("td").eq(0).text().trim();
-      const quality = $(el).find("td").eq(1).text().trim();
-      const link = $(el).find("a.dlbtn").attr("href");
-
-      if (link) {
-        results.push({ format, quality, link });
-      }
-    });
-
-    return results;
-  } catch (err) {
-    console.error("Error:", err.message);
-    return [];
+  // Step 2: extract the job log URL
+  const match = res.data.match(/\/queue\/download\/job\/([a-f0-9]+)\/log/);
+  if (!match) {
+    throw new Error("Job ID not found in response!");
   }
+
+  const jobUrl = `https://webtor.io/queue/download/job/${match[1]}/log`;
+  console.log("Job Log URL:", jobUrl);
+  return jobUrl;
 }
 
-// Example usage
-(async () => {
-  const videoUrl = "https://www.pornhub.com/view_video.php?viewkey=687e14da729aa";
-  const links = await scrapeLinks(videoUrl);
-  console.log("Scraped download links:", links);
-})();
+getJobUrl(
+  "d0592cfa1f3aeb8318ceafca42191d1f8663faae", // resource-id
+  "7ca875a0075b0a9c629e21d82de16141f49f6640"  // item-id
+);
