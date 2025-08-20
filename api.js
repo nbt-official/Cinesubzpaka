@@ -1,5 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
+const FormData = require("form-data");
 
 async function scrapeFilePage(pageUrl) {
   // Step 1: fetch HTML
@@ -25,18 +26,17 @@ async function scrapeFilePage(pageUrl) {
   console.log("sessionId:", sessionId);
   console.log("fileName:", fileName);
 
-  // Step 2: POST /download-file with correct headers
-  const formData = new URLSearchParams();
-  formData.append("resource-id", resourceId);
-  formData.append("item-id", itemId);
+  // Step 2: POST /download-file with multipart/form-data
+  const form = new FormData();
+  form.append("resource-id", resourceId);
+  form.append("item-id", itemId);
 
-  const res = await axios.post("https://webtor.io/download-file", formData, {
+  const res = await axios.post("https://webtor.io/download-file", form, {
     headers: {
-      "content-type": "application/x-www-form-urlencoded",
+      ...form.getHeaders(),
       "x-csrf-token": csrf,
       "cookie": `session=${sessionId}`,
       "x-requested-with": "XMLHttpRequest",
-      "x-session-id": sessionID,
       "origin": "https://webtor.io",
       "referer": pageUrl,
       "user-agent": "Mozilla/5.0"
@@ -55,4 +55,4 @@ async function scrapeFilePage(pageUrl) {
 
 scrapeFilePage("https://webtor.io/d0592cfa1f3aeb8318ceafca42191d1f8663faae")
   .then(data => console.log("Result:", data))
-  .catch(err => console.error(err));
+  .catch(err => console.error("Error:", err.response?.status, err.response?.data || err));
