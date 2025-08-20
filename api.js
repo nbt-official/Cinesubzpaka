@@ -1,28 +1,58 @@
 const axios = require("axios");
+const cheerio = require("cheerio");
 
-async function getJobUrl(resourceId, itemId) {
-  // Step 1: trigger the download job
-  const res = await axios.post(
-    "https://webtor.io/download-file",
-    new URLSearchParams({
-      "resource-id": resourceId,
-      "item-id": itemId
-    }),
-    { maxRedirects: 0 } // we don’t follow redirects
-  );
+async function scrapeFilePage(pageUrl) {
+  // Step 1: fetch HTML
+  const htmlRes = await axios.get(pageUrl, {
+    headers: { "User-Agent": "Mozilla/5.0" }
+  });
+  const $ = cheerio.load(htmlRes.data);
 
-  // Step 2: extract the job log URL
-  const match = res.data.match(/\/queue\/download\/job\/([a-f0-9]+)\/log/);
-  if (!match) {
-    throw new Error("Job ID not found in response!");
-  }
+  // Extract resource-id, item-id
+  const resourceId = $('form.download input[name="resource-id"]').val();
+  const itemId = $('form.download input[name="item-id"]').val();
 
-  const jobUrl = `https://webtor.io/queue/download/job/${match[1]}/log`;
+  // Extract CSRF + SessionID
+  const csrf = htmlRes.data.match(/window\._CSRF\s*=\s*"([^"]+)"/)[1];
+  const sessionId = htmlRes.data.match(/window\._sessionID\s*=\s*"([^"]+)"/)[1];
+
+  // Extract filename
+  const fileName = $("h1").text().trim();
+
+  console.log("resource-id:", resourceId);
+  console.log("item-id:", itemId);
+  console.log("csrf:", csrf);
+  console.log("sessionId:", sessionId);
+  console.log("fileName:", fileName);
+
+  // Step 2: POST /download-file with correct headers
+  const formData = new URLSearchParams();
+  formData.append("resource-id", resourceId);
+  formData.append("item-id", itemId);
+
+  const res = await axios.post("https://webtor.io/download-file", formData, {
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-csrf-token": csrf,
+      "cookie": `session=${sessionId}`,
+      "x-requested-with": "XMLHttpRequest",
+      "x-session-id": sessionID,
+      "origin": "https://webtor.io",
+      "referer": pageUrl,
+      "user-agent": "Mozilla/5.0"
+    }
+  });
+
+  // Step 3: Parse job-id from response
+  const jobMatch = res.data.match(/\/queue\/download\/job\/([a-f0-9]+)\/log/);
+  if (!jobMatch) throw new Error("Job ID not found!");
+
+  const jobUrl = `https://webtor.io/queue/download/job/${jobMatch[1]}/log`;
   console.log("Job Log URL:", jobUrl);
-  return jobUrl;
+
+  return { fileName, jobUrl };
 }
 
-getJobUrl(
-  "d0592cfa1f3aeb8318ceafca42191d1f8663faae", // resource-id
-  "7ca875a0075b0a9c629e21d82de16141f49f6640"  // item-id
-);
+scrapeFilePage("https://webtor.io/d0592cfa1f3aeb8318ceafca42191d1f8663faae")
+  .then(data => console.log("Result:", data))
+  .catch(err => console.error(err));
